@@ -6256,8 +6256,24 @@ bind_host_app() {
     echo "!!! no readable $3 from One UI either; binding $1 as it is"
     $BB mount --bind "$1" "$2" && echo "Host $(basename "$1") -> $2"
 }
-bind_host_app /system/priv-app/NetworkStackGoogle "$ROOTFS/system/priv-app/NetworkStack" com.google.android.networkstack
-bind_host_app /system/app/CaptivePortalLoginGoogle "$ROOTFS/system/app/CaptivePortalLogin" com.google.android.captiveportallogin
+HOST_NS=/system/priv-app/NetworkStackGoogle
+HOST_NS_PKG=com.google.android.networkstack
+if [ ! -d "$HOST_NS" ] && [ -d /system/priv-app/NetworkStack ]; then
+    HOST_NS=/system/priv-app/NetworkStack
+    HOST_NS_PKG=com.android.networkstack
+fi
+HOST_CP=/system/app/CaptivePortalLoginGoogle
+HOST_CP_PKG=com.google.android.captiveportallogin
+if [ ! -d "$HOST_CP" ] && [ -d /system/app/CaptivePortalLogin ]; then
+    HOST_CP=/system/app/CaptivePortalLogin
+    HOST_CP_PKG=com.android.captiveportallogin
+fi
+GUEST_NS="$ROOTFS/system/priv-app/NetworkStack"
+[ ! -d "$GUEST_NS" ] && [ -d "$ROOTFS/system/priv-app/NetworkStackGoogle" ] && GUEST_NS="$ROOTFS/system/priv-app/NetworkStackGoogle"
+GUEST_CP="$ROOTFS/system/app/CaptivePortalLogin"
+[ ! -d "$GUEST_CP" ] && [ -d "$ROOTFS/system/app/CaptivePortalLoginGoogle" ] && GUEST_CP="$ROOTFS/system/app/CaptivePortalLoginGoogle"
+bind_host_app "$HOST_NS" "$GUEST_NS" "$HOST_NS_PKG"
+bind_host_app "$HOST_CP" "$GUEST_CP" "$HOST_CP_PKG"
 if [ -d "$GUEST_SYSTEM_EXT/priv-app/CellBroadcastService" ]; then
     $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$GUEST_SYSTEM_EXT/priv-app/CellBroadcastService" && \
         echo "Hid guest system_ext/priv-app/CellBroadcastService"

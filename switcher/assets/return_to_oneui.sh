@@ -965,7 +965,16 @@ for s in $AHAL; do setprop ctl.stop $s; done
 for s in $AHAL; do setprop ctl.start $s; done
 rm -f $S/host_audio_hal_svcs
 setprop ctl.start audioserver
-wait_found media.audio_policy 20 || failsafe "One UI's audioserver did not register"
+DEFER_HOST_AUDIO=0
+if [ ! -f /system/priv-app/imsservice/imsservice.apk ]; then
+    if ! wait_found media.audio_policy 5; then
+        [ "$(getprop init.svc.audioserver)" = running ] || failsafe "Host audioserver did not start"
+        DEFER_HOST_AUDIO=1
+        say "audio: AOSP host audioserver running; waiting for media.audio_policy after framework start"
+    fi
+else
+    wait_found media.audio_policy 20 || failsafe "One UI's audioserver did not register"
+fi
 # The camera HALs first (0.4.38): the guest's Samsung Camera drove them for the
 # whole session and the camera worker set their fold posture; One UI's camera
 # glitched after a return until a reboot (F8U test9), which restarts them too.
@@ -998,7 +1007,9 @@ if [ -n "$GUEST_DEV" ]; then
     done
 fi
 [ $g = 0 ] || failsafe "$g guest processes still running"
-for name in vold SurfaceFlinger media.audio_policy media.audio_flinger installd; do
+GATE_B_SVCS="vold SurfaceFlinger media.audio_policy media.audio_flinger installd"
+[ "$DEFER_HOST_AUDIO" = 1 ] && GATE_B_SVCS="vold SurfaceFlinger installd"
+for name in $GATE_B_SVCS; do
     wait_found "$name" 5 || failsafe "$name is not registered"
 done
 for svc in vold keystore2 servicemanager hwservicemanager logd lmkd installd; do
@@ -1085,6 +1096,12 @@ while :; do
     [ $up -gt 0 ] && [ $t -ge $((up + 30)) ] && break
     [ $up = 0 ] && [ $t -ge 180 ] && failsafe "user 0 not unlocked within 180 s"
 done
+if [ "$DEFER_HOST_AUDIO" = 1 ]; then
+    for name in media.audio_policy media.audio_flinger; do
+        wait_found "$name" 15 || failsafe "$name did not register after AOSP host framework start"
+    done
+    say "audio: AOSP host media.audio_policy and media.audio_flinger registered"
+fi
 
 ip rule show 2>/dev/null | "$BB" diff "$BASE/iprule" - >> "$IPLOG" 2>&1 || say "!!! ip rules differ from the switch (diff in return_inplace.log)"
 # One UI is up. RescueParty back to the stored value, the modules read through
