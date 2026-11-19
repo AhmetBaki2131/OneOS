@@ -141,6 +141,7 @@ IMAGES_SDK36="oxygenos16-cph2745"
 # SHA-256 of the method lines of switcher/patches/host_installd.txt: the
 # installd codes the guard jars carry (InstalldExpected.SHA256).
 INSTALLD_SHA=791e52c441b62944f88244a2610b9433c869c9c3916a49f43d14552de82280f2
+INSTALLD_SHA_YAAP=1f1b94c0353fb2e69862a0f0411d70576a2bc8609e10c6788b425e0bdc41b874
 # SDK 36 images' sets carry One UI 8.5's codes (host_installd_a16.txt, staged as host_installd.txt;
 # InstalldExpected.SHA256_A16); One UI 8.0's table works with them too (SHA256_A16_ONEUI80).
 INSTALLD_SHA_36=a7c17883707d9b0b85e3f75f6d83cb4522ba1d120026d29308b69da968945977
@@ -252,6 +253,7 @@ profile_info() {
         s-8550-jp) echo "SCG19 SCG19 SM8550 bar" ;;
         m35) echo "SM-M356 m35x s5e8835 bar" ;;
         a15-5g) echo "SM-A156 a15x MT6835 bar" ;;
+        a05) echo "SM-A055 a05m MT6768 bar" ;;
         *) return 1 ;;
     esac
 }
@@ -589,6 +591,11 @@ profile_set() {
         "m35 hyperos-lhasa") echo hyper-f8u ;;
         "m35 nothingos5-asteroids") echo nothing-a ;;
         "a15-5g oxygenos16-cph2745") echo oxygen16 ;;
+        "a05 coloros17-findx9u-in-1105") echo x9u-in-1105-sultra ;;
+        "a05 infinityx41-findx9u") echo infinityx ;;
+        "a05 lineage24-infiniti") echo lineage ;;
+        "a05 hyperos-lhasa") echo hyper-f8u ;;
+        "a05 nothingos5-asteroids") echo nothing-a ;;
         *) return 1 ;;
     esac
 }
@@ -948,7 +955,7 @@ image_sdk() { # <image id>
 check_table() { # <file> <image id>
     f=$1
     if [ "$(image_sdk "$2")" = 36 ]; then carried=$INSTALLD_SHA_36 ok=$INSTALLD_OK_36
-    else carried=$INSTALLD_SHA ok=$INSTALLD_SHA; fi
+    else carried=$INSTALLD_SHA ok="$INSTALLD_SHA $INSTALLD_SHA_YAAP"; fi
     [ -f "$f" ] || refuse "host_installd.table missing"
     ge 65536 "$(stat -c %s "$f")" || refuse "host_installd.table is over 64 kB"
     [ "$(grep -v '^#' "$STAGE/host_installd.txt" 2>/dev/null | sha256sum | cut -d' ' -f1)" = "$carried" ] ||
