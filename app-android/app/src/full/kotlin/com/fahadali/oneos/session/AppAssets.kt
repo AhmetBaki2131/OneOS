@@ -97,7 +97,15 @@ object AppAssets {
         if (!InstalldExpected.needsYaapFsverityPatch(derivation)) return base
         val origSha = base["services_patched.jar"] ?: return base
         val yaap = YaapInstalldDexPatcher.cachedMeta(ctx, origSha) ?: return base
-        return base + ("services_patched.jar" to yaap.sha256)
+        val out = base.toMutableMap()
+        out["services_patched.jar"] = yaap.sha256
+        val origGuards = base["guards.txt"]
+        if (origGuards != null) {
+            YaapInstalldDexPatcher.cachedGuardsMeta(ctx, origGuards, origSha)?.let {
+                out["guards.txt"] = it.sha256
+            }
+        }
+        return out
     }
 
     /**
