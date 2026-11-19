@@ -202,13 +202,14 @@ object StageCheck : BackgroundJob<StageCheck.State>(State(), "oneos-check") {
         val st = r.status
         val launch = SessionPrefs.lastLaunch(app)
         val expectedResult = runCatching {
-            st.staged(profile)?.second?.let { AppAssets.expectedStageHashes(app, it, profile!!.id) }.orEmpty()
+            st.staged(profile)?.second?.let { AppAssets.expectedStageHashes(app, it, profile!!.id, r.installd) }.orEmpty()
         }
         val expected = expectedResult.getOrDefault(emptyMap())
         val input = GateInput(
             facts = facts,
             screenLockSet = screenLock,
             allowScreenLock = SessionPrefs.allowScreenLock(app),
+            allowCustomAospHost = true,
             oldSwitcherInstalled = r.oldSwitcher,
             installd = r.installd,
             stage = st.stageState(profile, expected),

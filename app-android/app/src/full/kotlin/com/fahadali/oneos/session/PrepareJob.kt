@@ -347,9 +347,9 @@ object PrepareJob : BackgroundJob<PrepareJob.State>(State(), "oneos-prepare") {
             detail("Checking experimental patch updates…")
             PatchChannels.refresh(app, set, profile.id)
         }
-        val files = AppAssets.files(app, set, profile.id)
+        var files = AppAssets.files(app, set, profile.id)
         val code = BuildConfig.VERSION_CODE.toString()
-        val filesBytes = files.sumOf { it.bytes }
+        var filesBytes = files.sumOf { it.bytes }
         update(state.copy(bytesTotal = base + (if (onPhone) 0L else image.gzBytes) + filesBytes))
 
         // 2b. (0.4.41) The set's files this app does not carry, downloaded by hash before the
@@ -423,6 +423,9 @@ object PrepareJob : BackgroundJob<PrepareJob.State>(State(), "oneos-prepare") {
             }
             base += need
         }
+
+        files = YaapInstalldDexPatcher.applyToStageList(app, files, derivation)
+        filesBytes = files.sumOf { it.bytes }
 
         // 3. begin.
         step(Step.BEGIN, "Making the stage OneOS's…")

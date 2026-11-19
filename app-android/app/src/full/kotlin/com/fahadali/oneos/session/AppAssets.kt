@@ -86,9 +86,19 @@ object AppAssets {
         }
     }
 
-    /** Compare the stage with the selected channel snapshot, including its exact payload hashes. */
-    fun expectedStageHashes(ctx: Context, set: PackageSet, profile: String): Map<String, String> =
-        files(ctx, set, profile).associate { it.name to it.sha256 } + ("bin/oneos_root.sh" to BuildConfig.ROOT_SCRIPT_SHA256)
+    /** Compare the stage with the selected channel snapshot, including its exact payload hashes (and YAAP fsverity remap). */
+    fun expectedStageHashes(
+        ctx: Context,
+        set: PackageSet,
+        profile: String,
+        derivation: com.fahadali.oneos.core.model.InstalldDerivation? = null,
+    ): Map<String, String> {
+        val base = files(ctx, set, profile).associate { it.name to it.sha256 } + ("bin/oneos_root.sh" to BuildConfig.ROOT_SCRIPT_SHA256)
+        if (!InstalldExpected.needsYaapFsverityPatch(derivation)) return base
+        val origSha = base["services_patched.jar"] ?: return base
+        val yaap = YaapInstalldDexPatcher.cachedMeta(ctx, origSha) ?: return base
+        return base + ("services_patched.jar" to yaap.sha256)
+    }
 
     /**
      * sha256 -> the sources of every set file the APK does not carry (0.4.41: one Drive id; empty in a packed
@@ -116,9 +126,10 @@ object AppAssets {
     /** Every set file hash any list in this app names: what the download cache may keep. */
     fun allSetHashes(ctx: Context): Set<String> = remoteIds(ctx).keys + PatchChannels.cachedHashes(ctx)
 
-    /** From the APK when it carries the file, else from the downloads ([SetDownloader]). */
+    /** From the APK when it carries the file, YAAP cache, else downloads ([SetDownloader]). */
     fun open(ctx: Context, f: Staged): InputStream {
         if (f.sha256 in packed(ctx)) return ctx.applicationContext.assets.open("oneos/files/${f.sha256}")
+        YaapInstalldDexPatcher.cachedFile(ctx, f.sha256, f.bytes)?.let { return it.inputStream() }
         val file = SetDownloader.cached(ctx, f) ?: throw Broken("${f.name} is not downloaded")
         return file.inputStream()
     }
