@@ -984,8 +984,12 @@ oneos_boot_begin enter
 # appears to "magically" deliver them.
 # So: make sure imsd is up, and give the modem a moment to (re)register before
 # the pivot. Never stop imsd afterwards; killing it was what degraded SMS.
-if ! pidof imsd >/dev/null 2>&1; then
-    setprop ctl.start imsd 2>/dev/null || true
+HAS_IMSD=0
+if [ -n "$(getprop init.svc.imsd 2>/dev/null)" ] || [ -x /vendor/bin/imsd ] || [ -x /system/bin/imsd ]; then
+    HAS_IMSD=1
+    if ! pidof imsd >/dev/null 2>&1; then
+        setprop ctl.start imsd 2>/dev/null || true
+    fi
 fi
 ims_i=0
 ims_st=1
@@ -1084,7 +1088,7 @@ fi
 # above). init does not always bring it back if it dies, and a dead imsd means
 # SMS quietly degrades to "arrives whenever the SMSC next retries", so keep it
 # supervised for the whole guest session.
-if ! ps -ef 2>/dev/null | grep -v grep | grep -q "ims_watchdog.sh"; then
+if [ "$HAS_IMSD" = 1 ] && ! ps -ef 2>/dev/null | grep -v grep | grep -q "ims_watchdog.sh"; then
     cat > /data/local/tmp/ims_watchdog.sh <<'IMSW'
 #!/system/bin/sh
 LOG=/data/local/tmp/ims_watchdog.log
@@ -1189,7 +1193,11 @@ case "$GL" in
     ''|-*|*[!A-Za-z0-9-]*) [ -n "$GL" ] && echo "Guest locale '$GL' in $STAGE/guest_locale is not a language tag; not used"; GL="" ;;
 esac
 if [ -z "$GL" ]; then
-    GL=$(settings get system system_locales 2>/dev/null | head -n 1 | cut -d, -f1) GLW="One UI's language"
+    GL=$(settings get system system_locales 2>/dev/null | head -n 1 | cut -d, -f1) GLW="Host language"
+    case "$GL" in ''|null|-*|*[!A-Za-z0-9-]*) GL="" ;; esac
+fi
+if [ -z "$GL" ]; then
+    GL=$(getprop ro.product.locale 2>/dev/null) GLW="Host ro.product.locale"
     case "$GL" in ''|null|-*|*[!A-Za-z0-9-]*) GL="" ;; esac
 fi
 if [ -n "$GL" ] && [ ${#GL} -le 35 ] && setprop persist.sys.locale "$GL" 2>/dev/null; then

@@ -252,7 +252,9 @@ if [ -f /data/oneos_gap_slow ]; then
 else
     sleep 0.5
     n=0
-    while [ $n -lt 15 ] && ! service check android.hardware.graphics.composer3.IComposer/default 2>/dev/null | grep -q ': found'; do
+    while [ $n -lt 15 ] && \
+          ! service check android.hardware.graphics.composer3.IComposer/default 2>/dev/null | grep -q ': found' && \
+          ! lshal list -i 2>/dev/null | grep -qE 'android\.hardware\.graphics\.composer@[0-9.]+::IComposer/'; do
         n=$((n + 1)); sleep 0.1
     done
     echo "[Pivoted Root] Composer registered after $((5 + n))00 ms"
