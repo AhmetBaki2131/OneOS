@@ -191,14 +191,81 @@ object InstalldExpected {
      * hash to [SHA256] (a wrong asset fails closed). Null compares with the
      * pinned hash only.
      */
-    fun problems(derived: InstalldDerivation?, expectedText: String? = null, sdk: Int = 37): List<String> {
+    /** The exact 27 AOSP methods routed by guest_installd_abi.py (slots 1..54 in host_installd.txt). */
+    val ALLOWED_AOSP_37: Map<String, Pair<Int, String>> = mapOf(
+        "createUserData" to (1 to "(Ljava/lang/String;III)V"),
+        "setFirstBoot" to (3 to "()V"),
+        "createAppData" to (4 to "(Landroid/os/CreateAppDataArgs;)Landroid/os/CreateAppDataResult;"),
+        "createAppDataBatched" to (5 to "([Landroid/os/CreateAppDataArgs;)[Landroid/os/CreateAppDataResult;"),
+        "restoreconAppData" to (7 to "(Ljava/lang/String;Ljava/lang/String;IIILjava/lang/String;)V"),
+        "fixupAppData" to (12 to "(Ljava/lang/String;I)V"),
+        "getAppSize" to (13 to "(Ljava/lang/String;[Ljava/lang/String;IIII[J[Ljava/lang/String;)[J"),
+        "getUserSize" to (14 to "(Ljava/lang/String;II[I[I)[J"),
+        "getExternalSize" to (15 to "(Ljava/lang/String;II[I)[J"),
+        "getAppCrates" to (16 to "(Ljava/lang/String;[Ljava/lang/String;I)[Landroid/os/storage/CrateMetadata;"),
+        "getUserCrates" to (17 to "(Ljava/lang/String;I)[Landroid/os/storage/CrateMetadata;"),
+        "controlDexOptBlocking" to (21 to "(Z)V"),
+        "mergeProfiles" to (23 to "(ILjava/lang/String;Ljava/lang/String;)I"),
+        "dumpProfiles" to (24 to "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Z"),
+        "copySystemProfile" to (25 to "(Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;)Z"),
+        "createProfileSnapshot" to (29 to "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z"),
+        "linkNativeLibraryDirectory" to (33 to "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"),
+        "createOatDirs" to (34 to "(Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V"),
+        "linkFile" to (35 to "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"),
+        "hashSecondaryDexFile" to (39 to "(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;I)[B"),
+        "invalidateMounts" to (40 to "()V"),
+        "isQuotaSupported" to (41 to "(Ljava/lang/String;)Z"),
+        "prepareAppProfile" to (42 to "(Ljava/lang/String;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z"),
+        "tryMountDataMirror" to (47 to "(Ljava/lang/String;)V"),
+        "getOdexVisibility" to (51 to "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I"),
+        "createFsveritySetupAuthToken" to (53 to "(Landroid/os/ParcelFileDescriptor;I)Landroid/os/IInstalld\$IFsveritySetupAuthToken;"),
+        "enableFsverity" to (54 to "(Landroid/os/IInstalld\$IFsveritySetupAuthToken;Ljava/lang/String;Ljava/lang/String;)I"),
+    )
+
+    /**
+     * YAAP 17 (SM-A055F, 55-method IInstalld) matches slots 1..51 (25 methods) byte-for-byte
+     * and shifts only createFsveritySetupAuthToken (52 vs 53) & enableFsverity (53 vs 54).
+     * Requires patching those 2 const/16 codes in guest services_patched.jar (patch_guest_installd_yaap.py).
+     */
+    val ALLOWED_YAAP_FSVERITY_37: Map<String, Pair<Int, String>> = mapOf(
+        "createFsveritySetupAuthToken" to (52 to "(Landroid/os/ParcelFileDescriptor;I)Landroid/os/IInstalld\$IFsveritySetupAuthToken;"),
+        "enableFsverity" to (53 to "(Landroid/os/IInstalld\$IFsveritySetupAuthToken;Ljava/lang/String;Ljava/lang/String;)I"),
+    )
+
+    fun allowedSubsetCompatible(derived: InstalldDerivation): Boolean {
+        val byName = derived.methods.associateBy { it.name }
+        val exact = ALLOWED_AOSP_37.all { (name, want) ->
+            val got = byName[name] ?: return@all false
+            got.code == want.first && got.signature == want.second
+        }
+        if (exact) return true
+        return ALLOWED_AOSP_37.all { (name, want) ->
+            val got = byName[name] ?: return@all false
+            val yaapShift = ALLOWED_YAAP_FSVERITY_37[name]
+            got.signature == want.second && (got.code == want.first || (yaapShift != null && got.code == yaapShift.first))
+        }
+    }
+
+    fun needsYaapFsverityPatch(derived: InstalldDerivation?): Boolean {
+        if (derived == null || !derived.ok) return false
+        val byName = derived.methods.associateBy { it.name }
+        return byName["createFsveritySetupAuthToken"]?.code == 52 && byName["enableFsverity"]?.code == 53
+    }
+
+    fun problems(
+        derived: InstalldDerivation?,
+        expectedText: String? = null,
+        sdk: Int = 37,
+        allowAospAllowedMatch: Boolean = false,
+    ): List<String> {
         if (derived == null) return listOf("installd table not derived on this phone")
         if (!derived.ok) return listOf("installd table not derived: ${derived.error ?: "no methods"}")
         val p = mutableListOf<String>()
         val expected = expectedText?.let(::nonCommentLines)
         if (expected != null && Hashes.sha256(expected) != carried(sdk)) p += "the app's host_installd.txt is not the pinned table"
         val got = methodLines(derived.methods)
-        val compatible = Hashes.sha256(got) in accepted(sdk)
+        val compatible = Hashes.sha256(got) in accepted(sdk) ||
+            (allowAospAllowedMatch && sdk == 37 && allowedSubsetCompatible(derived))
         if (!compatible) p += "this phone's installd table differs from the one the OneOS files carry"
         if (expected != null && got != expected && !compatible) {
             val want = expected.removeSuffix("\n").split('\n').toSet()

@@ -92,7 +92,7 @@ object CustomRomRule {
     /** A Samsung bootloader version (not "unknown", not another maker's). */
     fun samsungBootloader(bootloader: String): Boolean = SAMSUNG_BOOTLOADER.matches(bootloader.trim().uppercase())
 
-    fun check(s: Signals): Finding? {
+    fun check(s: Signals, allowCustomAospHost: Boolean = false): Finding? {
         val oneUi = s.oneUiRaw.isNotBlank()
         val bl = s.bootloader.trim().uppercase()
         val blSamsung = samsungBootloader(bl)
@@ -122,6 +122,13 @@ object CustomRomRule {
         }
         val sameModel = modelCode.isNotEmpty() && ((blSamsung && bootloaderOf(bl, modelFamily)) || vendorFamily == modelFamily)
         if (!oneUi && sameModel) {
+            if (allowCustomAospHost) {
+                return Finding(
+                    ID, Level.WARN, "Custom AOSP host (experimental YAAP mode)",
+                    "This ${s.model} runs an AOSP-based ROM without ro.build.version.oneui. Switching requires YAAP-matched host_installd and HAL checks.",
+                    R_NOT_ONE_UI,
+                )
+            }
             return finding(
                 R_NOT_ONE_UI, "Custom ROM: not One UI",
                 "This ${s.model} runs a system without One UI (no ro.build.version.oneui). OneOS runs next to stock " +

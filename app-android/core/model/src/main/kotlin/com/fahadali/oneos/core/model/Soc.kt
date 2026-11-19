@@ -56,12 +56,17 @@ object SocRules {
     private val MEDIATEK_RE = Regex("^mt\\d")
 
     /** Platform codename -> SoC model, for builds that leave `ro.soc.model` empty. */
+    private val MODEL_ALIAS = mapOf(
+        "MT6769V/CZ" to "MT6768",
+    )
+
     private val PLATFORM_MODEL = mapOf(
         "taro" to "SM8450",
         "kalama" to "SM8550",
         "pineapple" to "SM8650",
         "sun" to "SM8750",
         "canoe" to "SM8850",
+        "mt6768" to "MT6768",
     )
 
     private val MARKETING = mapOf(
@@ -74,6 +79,7 @@ object SocRules {
         "S5E9925" to "Exynos 2200",
         "S5E9945" to "Exynos 2400",
         "S5E9955" to "Exynos 2500",
+        "MT6768" to "MediaTek Helio G85",
     )
 
     fun resolve(p: SocProps): SocInfo {
@@ -95,7 +101,8 @@ object SocRules {
         }
 
         val platform = p.platform.trim()
-        val model = p.model.trim().ifEmpty {
+        val rawModel = p.model.trim()
+        val model = MODEL_ALIAS[rawModel.uppercase(Locale.ROOT)] ?: rawModel.ifEmpty {
             PLATFORM_MODEL[platform.lowercase(Locale.ROOT)].orEmpty()
         }
         val marketing = MARKETING[model.uppercase(Locale.ROOT)]

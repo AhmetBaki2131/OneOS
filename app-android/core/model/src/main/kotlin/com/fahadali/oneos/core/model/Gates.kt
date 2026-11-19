@@ -172,6 +172,7 @@ data class GateInput(
      * the tests keep working. An unreadable lock state blocks whatever this says.
      */
     val allowScreenLock: Boolean = false,
+    val allowCustomAospHost: Boolean = false,
 )
 
 /**
@@ -311,8 +312,11 @@ object SwitchGates {
         val image = choice?.let { Images.byId(it.imageId, images) }
         val set = choice?.let { PackageSets.byId(it.packageSetId, sets) }
 
-        // 0.4.74: no switching on a custom ROM ([CustomRomRule]).
-        f.customRom?.let { out += Gate(it) }
+        // 0.4.74: no switching on a custom ROM unless experimental YAAP/AOSP host mode is enabled.
+        CustomRomRule.check(
+            CustomRomRule.Signals(f.model, f.bootloader, f.vendorModel, f.oneUiRaw),
+            allowCustomAospHost = input.allowCustomAospHost,
+        )?.let { out += Gate(it) }
         out += Gate(root(f))
         out += profileGate(f, resolution, profiles, switching, choice, image, images)
         out += Gate(android(f, image, profile, images))
@@ -554,7 +558,12 @@ object SwitchGates {
         // With no system chosen yet, the phone's own (0.4.85: Android 17's table was used, so every
         // One UI 8.5 phone with nothing set up, or with a stage of another file set, read "One UI was updated").
         val sdk = image?.sdk ?: input.facts.sdk.takeIf { InstalldExpected.carried(it) != null } ?: 37
-        val p = InstalldExpected.problems(input.installd, if (sdk == 36) input.expectedInstalldA16 else input.expectedInstalld, sdk)
+        val p = InstalldExpected.problems(
+            input.installd,
+            if (sdk == 36) input.expectedInstalldA16 else input.expectedInstalld,
+            sdk,
+            allowAospAllowedMatch = input.allowCustomAospHost,
+        )
         return if (p.isEmpty()) {
             Finding(
                 ID_INSTALLD, Level.OK, "installd interface matches the OneOS files",
