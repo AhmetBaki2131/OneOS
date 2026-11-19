@@ -1349,7 +1349,9 @@ do_launch() {
     model=$(getprop ro.product.model)
     case "$model" in "$1"*) ;; *) refuse "this phone ($model) is not a $1" ;; esac
     [ "$(getprop ro.product.device)" = "$2" ] || refuse "codename $(getprop ro.product.device), profile $M_PROFILE is $2"
-    [ "$(getprop ro.soc.model)" = "$3" ] || refuse "chip $(getprop ro.soc.model), profile $M_PROFILE is $3"
+    soc=$(getprop ro.soc.model)
+    [ "$soc" = "MT6769V/CZ" ] && soc=MT6768
+    [ "$soc" = "$3" ] || refuse "chip $soc, profile $M_PROFILE is $3"
     isdk=$(image_sdk "$M_IMAGE")
     [ "$(getprop ro.build.version.sdk)" = "$isdk" ] || refuse "Android SDK $(getprop ro.build.version.sdk), the image is $isdk"
     idle_or_refuse launch
